@@ -57,8 +57,7 @@ function cf_request($method, $endpoint, $data = null, $token, $verbose = false) 
         $jsonData = json_encode($data);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
         if ($verbose) {
-            echo "Request to $url with data: $jsonData
-";
+            echo "Request to $url with data: $jsonData\n";
         }
     }
     $response = curl_exec($ch);
@@ -67,39 +66,47 @@ function cf_request($method, $endpoint, $data = null, $token, $verbose = false) 
     curl_close($ch);
 
     if ($err) {
-        fwrite(STDERR, "cURL error: $err
-");
+        fwrite(STDERR, "cURL error: $err\n");
         return null;
     }
     $decoded = json_decode($response, true);
     if ($verbose) {
-        echo "Response: $response
-";
+        echo "Response: $response\n";
     }
     return $decoded;
 }
 
-$zones_resp = cf_request("GET", "/zones", null, $token, $verbose);
-if (!$zones_resp || !$zones_resp['success']) {
-    fwrite(STDERR, "Failed to fetch zones.\n");
-    exit(1);
-}
+$zones = [];
+$page = 1;
+$per_page = 50;
+
+do {
+    $resp = cf_request("GET", "/zones?page=$page&per_page=$per_page", null, $token, $verbose);
+    if (!$resp || !$resp['success']) {
+        fwrite(STDERR, "Failed to fetch zones on page $page.\n");
+        break;
+    }
+
+    $zones = array_merge($zones, $resp['result']);
+
+    $page++;
+    $total_pages = $resp['result_info']['total_pages'];
+
+} while ($page <= $total_pages);
 
 $results = [];
 
-foreach ($zones_resp['result'] as $zone) {
+foreach ($zones as $zone) {
     $zone_name = $zone['name'];
     if ($zones_filter !== null && !in_array($zone_name, $zones_filter)) {
         if ($verbose) {
-            echo "Skipping zone $zone_name
-";
+            echo "Skipping zone $zone_name\n";
         }
         continue;
     }
     $zone_id = $zone['id'];
     if ($verbose) {
-        echo "Processing zone: $zone_name
-";
+        echo "Processing zone: $zone_name\n";
     }
 
     $dns_resp = cf_request("GET", "/zones/$zone_id/dns_records", null, $token, $verbose);
